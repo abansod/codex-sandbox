@@ -1,0 +1,9 @@
+.git
+.github
+.codex
+.env
+.env.*
+auth.json
+*.log
+node_modules
+target

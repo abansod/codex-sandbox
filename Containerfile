@@ -12,12 +12,16 @@ RUN apt-get update && \
       ripgrep \
       jq \
       python3 \
+      rustc \
+      cargo \
+      build-essential \
       bash \
       bubblewrap \
     && rm -rf /var/lib/apt/lists/*
 
-# Install latest stable Codex CLI
-RUN npm install -g @openai/codex@latest
+# Override at build time to install a specific Codex CLI release.
+ARG CODEX_VERSION=latest
+RUN npm install -g "@openai/codex@${CODEX_VERSION}"
 
 # Create non-root user
 RUN useradd -m -u 10001 -s /bin/bash codexuser \
