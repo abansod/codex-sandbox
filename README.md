@@ -69,6 +69,8 @@ Arguments are passed directly to Codex:
 
 The launcher follows the macOS/Secretive setup: 8 GB memory, 4 CPUs, a read-only root filesystem, temporary writable `/tmp` and home directories, UID/GID 10001, public DNS, `no-new-privileges`, and disabled SELinux labeling. It adds a TTY only for interactive terminals and preserves stdin for piped commands. `PLATFORM=linux/arm64` can explicitly select the architecture; otherwise Podman uses the image default.
 
+The launcher enables general outbound networking for agent commands in Codex's `workspace-write` sandbox, including GitHub SSH access, subject to managed policy. To disable it for a launch, pass `-c sandbox_workspace_write.network_access=false`. Start a new session to apply launcher changes; no image rebuild is needed.
+
 Add a wrapper to `~/.zshrc` (replace the repository path):
 
 ```zsh

@@ -78,4 +78,6 @@ if [[ "$SSH_MODE" == secretive ]]; then
 fi
 
 # Do not exec: the EXIT trap must close the SSH tunnel after the container stops.
-podman "${run_args[@]}" "$IMAGE_NAME" "$@"
+podman "${run_args[@]}" "$IMAGE_NAME" \
+  -c 'sandbox_workspace_write.network_access=true' \
+  "$@"
