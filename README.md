@@ -59,6 +59,14 @@ PROJECT_DIR=/absolute/path/to/project ./codex-sandbox.sh
 PROJECT_DIR="$PWD" /path/to/codex-sandbox/codex-sandbox.sh
 ```
 
+The launcher preserves your current directory when it is inside `PROJECT_DIR`.
+For example, with the default `$HOME/projects` mount, running `codex-sandbox`
+from `$HOME/projects/mac-cleaner` opens Codex in `/workspace/mac-cleaner`.
+Nested directories map the same way. From the mount root or a directory outside
+the mount, Codex starts in `/workspace`. Paths are resolved through symlinks;
+only directories physically inside the project mount are mapped. An explicit
+`PROJECT_DIR` uses that directory as the mount root instead.
+
 Arguments are passed directly to Codex:
 
 ```bash

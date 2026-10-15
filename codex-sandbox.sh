@@ -21,6 +21,15 @@ if [[ "$SSH_MODE" == secretive ]]; then
 fi
 mkdir -p -- "$PROJECT_DIR"
 PROJECT_DIR="$(cd -- "$PROJECT_DIR" && pwd -P)"
+# Resolve symlinks on both sides before mapping the host directory into the mount.
+launch_dir="$(pwd -P)"
+container_workdir=/workspace
+project_prefix="${PROJECT_DIR%/}/"
+if [[ "$launch_dir" == "$PROJECT_DIR" ]]; then
+  container_workdir=/workspace
+elif [[ "$launch_dir" == "$project_prefix"* ]]; then
+  container_workdir="/workspace/${launch_dir#"$project_prefix"}"
+fi
 if ! podman volume exists "$CODEX_VOLUME"; then
   podman volume create "$CODEX_VOLUME" >/dev/null
 fi
@@ -35,7 +44,7 @@ run_args=(run --rm -i --memory "$MEMORY" --cpus "$CPUS"
   -v "$CODEX_VOLUME:/home/codexuser/.codex:rw"
   -v "$PROJECT_DIR:/workspace:rw"
   -e HOME=/home/codexuser -e CODEX_HOME=/home/codexuser/.codex
-  -w /workspace)
+  -w "$container_workdir")
 [[ ! -t 0 || ! -t 1 ]] || run_args+=(-t)
 [[ -z "${PLATFORM:-}" ]] || run_args+=(--platform "$PLATFORM")
 [[ ! -f "$HOME/.gitconfig" ]] || run_args+=(-v "$HOME/.gitconfig:/home/codexuser/.gitconfig:ro")

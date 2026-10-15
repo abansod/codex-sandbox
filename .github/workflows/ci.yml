@@ -21,6 +21,7 @@ jobs:
           bash -n build-verify-codex.sh codex-sandbox.sh setup.sh
           shellcheck build-verify-codex.sh codex-sandbox.sh setup.sh
           git diff --check
+          bash tests/test-launcher.sh
       - name: Build and verify image
         env:
           PLATFORM: linux/amd64

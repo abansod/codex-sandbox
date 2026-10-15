@@ -11,7 +11,7 @@ This repository builds and launches a Podman development image for the Codex CLI
 - `.github/workflows/ci.yml`: static checks and AMD64 container verification.
 - `README.md`, `CONTRIBUTING.md`, and `SECURITY.md`: usage, contribution, and security guidance.
 
-There are no separate source, test, or asset directories; verification lives in the build script and CI workflow.
+`tests/test-launcher.sh` checks launcher directory mapping with a fake Podman and disposable directories. Image verification lives in the build script and CI workflow.
 
 ## Build, Test, and Development Commands
 
@@ -21,6 +21,7 @@ Run from the repository root:
 bash -n build-verify-codex.sh codex-sandbox.sh setup.sh
 shellcheck build-verify-codex.sh codex-sandbox.sh setup.sh
 git diff --check
+bash tests/test-launcher.sh
 ./build-verify-codex.sh
 SSH_MODE=none PROJECT_DIR="$PWD" ./codex-sandbox.sh --version
 ```

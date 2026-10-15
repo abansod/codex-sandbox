@@ -8,6 +8,7 @@ Keep changes focused on the development image, its launcher, or its documentatio
 bash -n build-verify-codex.sh codex-sandbox.sh setup.sh
 shellcheck build-verify-codex.sh codex-sandbox.sh setup.sh
 git diff --check
+bash tests/test-launcher.sh
 ./build-verify-codex.sh
 SSH_MODE=none PROJECT_DIR="$PWD" ./codex-sandbox.sh --version
 ```
