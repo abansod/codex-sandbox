@@ -27,8 +27,8 @@ fi
 
 run_args=(run --rm -i --memory "$MEMORY" --cpus "$CPUS"
   --read-only
-  --tmpfs /tmp:rw,nosuid,nodev,size=1g
-  --tmpfs /home/codexuser:rw,nosuid,nodev,size=512m,mode=1777
+  --tmpfs "/tmp:rw,nosuid,nodev,size=1g"
+  --tmpfs "/home/codexuser:rw,nosuid,nodev,size=512m,mode=1777"
   --user 10001:10001
   --dns 8.8.8.8 --dns 1.1.1.1
   --security-opt no-new-privileges --security-opt label=disable
@@ -54,6 +54,8 @@ if [[ "$SSH_MODE" == secretive ]]; then
     -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$tunnel_dir/known_hosts")
   destination="$remote_user@127.0.0.1"
   cleanup() {
+    # Expand the locally generated VM path before sending the remote command.
+    # shellcheck disable=SC2029
     ssh "${ssh_args[@]}" "$destination" "rm -rf -- '$vm_dir'" >/dev/null 2>&1 || true
     ssh "${ssh_args[@]}" -S "$tunnel_dir/control" -O exit "$destination" >/dev/null 2>&1 || true
     rm -rf -- "$tunnel_dir"
@@ -61,6 +63,8 @@ if [[ "$SSH_MODE" == secretive ]]; then
   trap cleanup EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM
+  # These VM paths are generated locally from numeric values, not user input.
+  # shellcheck disable=SC2029
   ssh "${ssh_args[@]}" "$destination" "mkdir -m 700 -- '$vm_dir' && chmod 711 '$vm_dir'"
   ssh "${ssh_args[@]}" -M -S "$tunnel_dir/control" -fNT \
     -o ExitOnForwardFailure=yes -o StreamLocalBindMask=0177 \
@@ -68,8 +72,10 @@ if [[ "$SSH_MODE" == secretive ]]; then
     -R "$vm_socket:$SECRETIVE_SOCK" "$destination"
   # Set ownership in the same UID namespace used by the container engine.
   if [[ "$rootful" == true ]]; then
+    # shellcheck disable=SC2029 # vm_socket must expand on the client.
     ssh "${ssh_args[@]}" "$destination" "sudo -n chown 10001:10001 '$vm_socket'"
   else
+    # shellcheck disable=SC2029 # vm_socket must expand on the client.
     ssh "${ssh_args[@]}" "$destination" "podman unshare chown 10001:10001 '$vm_socket'"
   fi
   run_args+=(-v "$vm_socket:/tmp/ssh-agent.sock:ro"
