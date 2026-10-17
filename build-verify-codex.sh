@@ -51,6 +51,8 @@ podman run --rm \
   rm "$HOME/.write-check"
   command -v codex
   command -v node
+  command -v npm
+  command -v tsc
   command -v git
   command -v ssh
   command -v rg
@@ -58,6 +60,8 @@ podman run --rm \
   command -v cargo
   printf "User: %s (UID %s)\n" "$(id -un)" "$(id -u)"
   printf "Node: %s\n" "$(node --version)"
+  printf "npm: %s\n" "$(npm --version)"
+  printf "TypeScript: %s\n" "$(tsc --version)"
   printf "Git: %s\n" "$(git --version)"
   printf "Rust: %s\n" "$(rustc --version)"
   printf "Cargo: %s\n" "$(cargo --version)"
@@ -65,6 +69,15 @@ podman run --rm \
   trap '\''rm -rf "$rust_check_dir"'\'' EXIT
   cargo new --bin --vcs none "$rust_check_dir/rust-check"
   cargo run --offline --manifest-path "$rust_check_dir/rust-check/Cargo.toml"
+  mkdir "$rust_check_dir/typescript-check"
+  cd "$rust_check_dir/typescript-check"
+  npm init --yes
+  printf '\''const message: string = "TypeScript works"; console.log(message);\n'\'' > index.ts
+  tsc --strict index.ts
+  test "$(node index.js)" = "TypeScript works"
 '
+
+printf '\n==> Verifying project home persistence\n'
+IMAGE_NAME="$IMAGE_NAME" PLATFORM="$PLATFORM" bash "$SCRIPT_DIR/tests/test-project-home.sh"
 
 printf '\nSUCCESS: %s built and verified.\n' "$IMAGE_NAME"

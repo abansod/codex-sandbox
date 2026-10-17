@@ -1,6 +1,6 @@
 # Codex Sandbox
 
-A Podman development image for the OpenAI Codex CLI. It runs as `codexuser` (UID 10001) in `/workspace` and includes Node.js 24, Python 3, Rust (`rustc` and `cargo`), C/C++ build tools, Git, SSH, ripgrep, jq, curl, and bubblewrap.
+A Podman development image for the OpenAI Codex CLI. It runs as `codexuser` (UID 10001) in `/workspace` and includes Node.js 24 with npm, TypeScript (`tsc`), Python 3, Rust (`rustc` and `cargo`), C/C++ build tools, Git, SSH, ripgrep, jq, curl, and bubblewrap.
 
 ## Requirements
 
@@ -37,7 +37,7 @@ cd codex-sandbox
 ./build-verify-codex.sh
 ```
 
-The script builds `codex-local:latest` for the host architecture (ARM64 or AMD64). It verifies the CLI, non-root user, development tools, and an offline Rust compile and run. Run this script on the host where Podman is available.
+The script builds `codex-local:latest` for the host architecture (ARM64 or AMD64). It verifies the CLI, non-root user, development tools, offline Rust and TypeScript compile and run, and npm tool persistence across sessions. Run this script on the host where Podman is available.
 
 Override the image name or target platform when needed:
 
@@ -75,7 +75,7 @@ Arguments are passed directly to Codex:
 ./codex-sandbox.sh exec "Explain this repository"
 ```
 
-The launcher follows the macOS/Secretive setup: 8 GB memory, 4 CPUs, a read-only root filesystem, temporary writable `/tmp` and home directories, UID/GID 10001, public DNS, `no-new-privileges`, and disabled SELinux labeling. It adds a TTY only for interactive terminals and preserves stdin for piped commands. `PLATFORM=linux/arm64` can explicitly select the architecture; otherwise Podman uses the image default.
+The launcher follows the macOS/Secretive setup: 8 GB memory, 4 CPUs, a read-only root filesystem, temporary writable `/tmp`, a persistent home per project, UID/GID 10001, public DNS, `no-new-privileges`, and disabled SELinux labeling. It adds a TTY only for interactive terminals and preserves stdin for piped commands. `PLATFORM=linux/arm64` can explicitly select the architecture; otherwise Podman uses the image default.
 
 The launcher enables general outbound networking for agent commands in Codex's `workspace-write` sandbox, including GitHub SSH access, subject to managed policy. To disable it for a launch, pass `-c sandbox_workspace_write.network_access=false`. Start a new session to apply launcher changes; no image rebuild is needed.
 
@@ -103,7 +103,34 @@ To run without Secretive or a Podman VM (for example, Linux CI):
 SSH_MODE=none PROJECT_DIR="$PWD" ./codex-sandbox.sh --version
 ```
 
-Temporary home data, including default Cargo and npm caches, disappears on exit. The project mount and Codex volume persist.
+## Project environments
+
+Each session uses a fresh container that is removed on exit with `--rm`. Its home directory is stored in a named Podman volume, so user-installed tools, caches, and home configuration survive. `/tmp` remains temporary. Each launch uses the current `IMAGE_NAME`; rebuilding the image does not erase saved homes.
+
+With the default mount, `~/projects/my-app` and its subdirectories share one home, while `~/projects/another-app` gets a different home. With an explicit `PROJECT_DIR`, that directory defines the home identity, regardless of where you launch. Launching from the default mount root or outside it uses a home for the mount root. Identity uses the canonical host path and a SHA-256 hash: symlink aliases share state, while moving a project creates a new environment. Existing saved state remains available for manual cleanup.
+
+Inside a session, install user tools normally:
+
+```bash
+npm install -g prettier
+cargo install ripgrep
+```
+
+The launcher sets npm's global prefix to `$HOME/.local` and puts `$HOME/.local/bin` and `$HOME/.cargo/bin` on `PATH`. For a new home, it creates `.profile` to keep those paths available in Bash login shells; existing profiles are preserved. It creates `.local`, `.npm`, `.cargo`, and `.cache` in the saved home and configures them as additional [Codex workspace-write roots](https://learn.chatgpt.com/docs/config-file/config-reference). Managed policy still applies. An explicit later `-c sandbox_workspace_write.writable_roots=...` replaces that default list. System packages installed with `apt` still require a Containerfile change and image rebuild; the runtime remains non-root with a read-only root filesystem.
+
+Inspect and clean up saved environments from the host:
+
+```bash
+codex-sandbox state list
+codex-sandbox state remove codex-project-HASH  # Use a full volume name from list.
+codex-sandbox state prune
+```
+
+`list` shows the project path, volume name, approximate home size, last session start time in UTC, and whether any container references the volume. It runs a disposable, network-disabled container with the home mounted read-only; the configured image must exist locally. Last use is recorded inside the home at session startup; older or modified homes may report unknown or altered timestamps.
+
+`remove` previews a selected home. `prune` previews **all homes without a container reference**, including recently used ones. Both require typing `yes`, cancel on EOF, recheck references before deletion, and never force removal. There is no automatic cleanup or age-based deletion. Containers referencing a home, including stopped containers, prevent removal.
+
+Cleanup deletes the selected home's installed tools, caches, and configuration. It does not delete host project files or the separate `CODEX_VOLUME` containing Codex settings and credentials. Project homes are sensitive too: tools may store tokens there, and saved executables run in future sessions. Homes have no automatic size limit; use `state list` to monitor usage. Concurrent sessions for the same project share the home, so avoid simultaneous tool installations.
 
 ## Sign in
 
@@ -152,6 +179,8 @@ To pin Codex, set `CODEX_VERSION` to a published npm release. The Node base imag
 
 Rust and Cargo come from Debian Bookworm packages. They are not installed through rustup, and may be older than the latest Rust release. Projects requiring a newer toolchain should customize the Containerfile.
 
+npm comes with the Node.js base image, and TypeScript is installed globally through npm. Rebuild the image to pick up these tools. Build verification initializes an npm project and compiles and runs a TypeScript program alongside the Rust check.
+
 ## Shell access
 
 Override the image entrypoint to inspect the environment:
@@ -164,7 +193,7 @@ This shell is temporary and does not mount your project or persistent settings. 
 
 ```bash
 podman run --rm --entrypoint /bin/sh codex-local:latest \
-  -c 'rustc --version && cargo --version && node --version'
+  -c 'rustc --version && cargo --version && node --version && npm --version && tsc --version'
 ```
 
 ## Troubleshooting
@@ -180,6 +209,6 @@ podman run --rm --entrypoint /bin/sh codex-local:latest \
 
 The launcher uses a read-only root filesystem and `no-new-privileges`. Its project mount remains writable, SELinux labeling is disabled, and its SSH agent can authorize Git operations. Review [SECURITY.md](SECURITY.md) for the trust boundary. The build retains its existing `SYS_ADMIN` build capability; runtime verification uses the read-only settings.
 
-Rebuild to pick up updates; changing the Containerfile does not update an existing image. GitHub Actions checks shell scripts, builds the AMD64 image, compiles a Rust program, and checks the launcher and writable project mount. ARM64 and end-to-end authenticated Codex sandbox behavior require host verification.
+Rebuild to pick up updates; changing the Containerfile does not update an existing image. GitHub Actions checks shell scripts, builds the AMD64 image, compiles Rust and TypeScript programs, checks a local npm tool persists across sessions, and checks the launcher and writable project mount. ARM64 and end-to-end authenticated Codex sandbox behavior require host verification.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development checks. Licensed under the [MIT License](LICENSE).

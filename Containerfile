@@ -21,7 +21,7 @@ RUN apt-get update && \
 
 # Override at build time to install a specific Codex CLI release.
 ARG CODEX_VERSION=latest
-RUN npm install -g "@openai/codex@${CODEX_VERSION}"
+RUN npm install -g "@openai/codex@${CODEX_VERSION}" typescript
 
 # Create non-root user
 RUN useradd -m -u 10001 -s /bin/bash codexuser \

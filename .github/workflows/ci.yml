@@ -18,8 +18,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y podman shellcheck
       - name: Check shell scripts
         run: |
-          bash -n build-verify-codex.sh codex-sandbox.sh setup.sh
-          shellcheck build-verify-codex.sh codex-sandbox.sh setup.sh
+          bash -n build-verify-codex.sh codex-sandbox.sh setup.sh tests/test-launcher.sh tests/test-project-home.sh
+          shellcheck build-verify-codex.sh codex-sandbox.sh setup.sh tests/test-launcher.sh tests/test-project-home.sh
           git diff --check
           bash tests/test-launcher.sh
       - name: Build and verify image
