@@ -19,6 +19,18 @@ if [[ "$1" == volume ]]; then
   case "$2" in
     create)
       volume="${!#}"
+      # Reject newer ownership flags, matching the Podman 4.x CI engine.
+      for arg in "$@"; do
+        case "$arg" in
+          --uid|--gid|--uid=*|--gid=*)
+            printf 'Unsupported volume creation flag: %s\n' "$arg" >&2
+            exit 1
+            ;;
+        esac
+      done
+      if [[ "$volume" == codex-project-* ]]; then
+        [[ " $* " == *' --opt o=uid=10001,gid=10001 '* ]] || exit 1
+      fi
       mkdir -p "$TEST_PODMAN_STORE/$volume"
       for arg in "$@"; do
         if [[ "$arg" == io.codex-sandbox.project-home=true ]]; then

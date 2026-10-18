@@ -154,7 +154,8 @@ else
 fi
 project_home="codex-project-${project_hash%% *}"
 [[ "$project_home" != "$CODEX_VOLUME" ]] || error 'CODEX_VOLUME must differ from the project home volume.'
-podman volume create --ignore --uid 10001 --gid 10001 \
+# Use driver ownership options supported by Podman 4.x as well as newer engines.
+podman volume create --ignore --opt 'o=uid=10001,gid=10001' \
   --label "$state_label=true" --label "$project_label=$state_project" \
   "$project_home" >/dev/null
 state_managed "$project_home"
