@@ -23,7 +23,7 @@ trap cleanup EXIT
 bash "$repo_dir/codex-sandbox.sh" --version
 home_args=(run --rm --read-only --network none --user 10001:10001
   --security-opt no-new-privileges --security-opt label=disable
-  --tmpfs /tmp:rw,nosuid,nodev,size=128m
+  --tmpfs '/tmp:rw,nosuid,nodev,size=128m'
   --entrypoint /bin/sh
   -v "$project_home:/home/codexuser:rw,nocopy"
   -v "$CODEX_VOLUME:/home/codexuser/.codex:rw"

@@ -124,7 +124,10 @@ grep -q '^--read-only$' "$TEST_RUN_ARGS"
 grep -q '^NPM_CONFIG_PREFIX=/home/codexuser/.local$' "$TEST_RUN_ARGS"
 grep -q '^PATH=/home/codexuser/.local/bin:/home/codexuser/.cargo/bin:' "$TEST_RUN_ARGS"
 grep -q '^sandbox_workspace_write.writable_roots=.*.local.*.npm.*.cargo.*.cache' "$TEST_RUN_ARGS"
-! grep -q '^/home/codexuser:rw,nosuid' "$TEST_RUN_ARGS"
+if grep -q '^/home/codexuser:rw,nosuid' "$TEST_RUN_ARGS"; then
+  printf 'Unexpected temporary home mount in launcher arguments.\n' >&2
+  exit 1
+fi
 
 # State commands work without SSH setup or a project directory and preserve
 # credentials, referenced volumes, and anything outside the managed namespace.
