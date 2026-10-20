@@ -1,6 +1,6 @@
 # Codex Sandbox
 
-A Podman development image for the OpenAI Codex CLI. It runs as `codexuser` (UID 10001) in `/workspace` and includes Node.js 24 with npm, TypeScript (`tsc`), Python 3, Rust (`rustc` and `cargo`), C/C++ build tools, Git, SSH, ripgrep, jq, curl, and bubblewrap.
+A Podman development image for the OpenAI Codex CLI, based on `node:24-trixie-slim` (Debian 13). It runs as `codexuser` (UID 10001) in `/workspace` and includes Node.js 24 with npm, TypeScript (`tsc`), Python 3, Git, SSH, ripgrep, jq, curl, and bubblewrap.
 
 ## Requirements
 
@@ -37,7 +37,7 @@ cd codex-sandbox
 ./build-verify-codex.sh
 ```
 
-The script builds `codex-local:latest` for the host architecture (ARM64 or AMD64). It verifies the CLI, non-root user, development tools, offline Rust and TypeScript compile and run, and npm tool persistence across sessions. Run this script on the host where Podman is available.
+The script builds `codex-local:latest` for the host architecture (ARM64 or AMD64). It verifies the CLI, non-root user, development tools, offline TypeScript compile and run, and npm tool persistence across sessions. Run this script on the host where Podman is available.
 
 Override the image name or target platform when needed:
 
@@ -46,6 +46,15 @@ IMAGE_NAME=codex-dev:latest PLATFORM=linux/amd64 ./build-verify-codex.sh
 ```
 
 Cross-architecture builds need emulation support in your Podman environment. Native builds are preferred.
+
+The image uses the slim Debian base and removes apt package lists and npm download caches in their installation layers. Rust and C/C++ toolchains are excluded from the base image; projects can use a custom image when they need them. To measure a rebuilt image and inspect its layers on the host:
+
+```bash
+podman image inspect codex-local:latest --format '{{.Size}}'
+podman history codex-local:latest
+```
+
+The reported size is in bytes; actual savings depend on the architecture and package versions.
 
 ## Run
 
@@ -113,7 +122,6 @@ Inside a session, install user tools normally:
 
 ```bash
 npm install -g prettier
-cargo install ripgrep
 ```
 
 The launcher sets npm's global prefix to `$HOME/.local` and puts `$HOME/.local/bin` and `$HOME/.cargo/bin` on `PATH`. For a new home, it creates `.profile` to keep those paths available in Bash login shells; existing profiles are preserved. It creates `.local`, `.npm`, `.cargo`, and `.cache` in the saved home and configures them as additional [Codex workspace-write roots](https://learn.chatgpt.com/docs/config-file/config-reference). Managed policy still applies. An explicit later `-c sandbox_workspace_write.writable_roots=...` replaces that default list. System packages installed with `apt` still require a Containerfile change and image rebuild; the runtime remains non-root with a read-only root filesystem.
@@ -177,9 +185,27 @@ Treat the volume as sensitive because it can contain credentials. Container dele
 
 To pin Codex, set `CODEX_VERSION` to a published npm release. The Node base image and Debian packages still follow their upstream tags and repositories; this is not a fully reproducible build.
 
-Rust and Cargo come from Debian Bookworm packages. They are not installed through rustup, and may be older than the latest Rust release. Projects requiring a newer toolchain should customize the Containerfile.
+Rust, Cargo, and C/C++ build tools are installed only when a project needs them. Since sessions run non-root with a read-only root filesystem, use a derived image to add system toolchains. For example, save this as `Containerfile.project`:
 
-npm comes with the Node.js base image, and TypeScript is installed globally through npm. Rebuild the image to pick up these tools. Build verification initializes an npm project and compiles and runs a TypeScript program alongside the Rust check.
+```dockerfile
+FROM codex-local:latest
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends rustc cargo build-essential \
+    && rm -rf /var/lib/apt/lists/*
+USER codexuser
+```
+
+Keep only the packages the project needs (`build-essential` for C/C++; Rust builds also need a native linker). Build and select the image on the host:
+
+```bash
+podman build -t codex-project:latest -f Containerfile.project .
+IMAGE_NAME=codex-project:latest PROJECT_DIR="$PWD" /path/to/codex-sandbox/codex-sandbox.sh
+```
+
+User-installed tools under the project home persist across sessions. Adding a user-local Rust toolchain alone does not provide a system C/C++ compiler or linker.
+
+npm comes with the Node.js base image, and TypeScript is installed globally through npm. Rebuild the image to pick up these tools. Build verification initializes an npm project and compiles and runs a TypeScript program using the bundled Node.js runtime.
 
 ## Shell access
 
@@ -193,7 +219,7 @@ This shell is temporary and does not mount your project or persistent settings. 
 
 ```bash
 podman run --rm --entrypoint /bin/sh codex-local:latest \
-  -c 'rustc --version && cargo --version && node --version && npm --version && tsc --version'
+  -c 'node --version && npm --version && tsc --version'
 ```
 
 ## Troubleshooting
@@ -203,12 +229,12 @@ podman run --rm --entrypoint /bin/sh codex-local:latest \
 - **Permission denied on a project:** check VM shared-folder permissions and ownership for UID 10001. On native Linux, arrange directory permissions for the container user in the engine's UID namespace; the launcher uses your fixed container UID rather than host UID mapping.
 - **Namespace or bubblewrap errors:** the launcher uses `no-new-privileges` without `SYS_ADMIN`. Host policies may prevent nested namespaces. Installing bubblewrap alone does not verify that Codex sandboxing works on every host; check the actual Codex workflow on your machine.
 - **SSH tunnel errors:** verify Secretive is open, the selected Podman machine is running, and its rootless/rootful mode matches the active engine. Forwarding failures stop launch and trigger cleanup.
-- **Rust package requires a newer compiler:** inspect `rustc --version` and customize the image toolchain.
+- **Compiler or linker missing:** add the required Rust or C/C++ toolchain to a project image as shown above. Native npm dependencies can also require C/C++ build tools.
 
 ## Security and maintenance
 
 The launcher uses a read-only root filesystem and `no-new-privileges`. Its project mount remains writable, SELinux labeling is disabled, and its SSH agent can authorize Git operations. Review [SECURITY.md](SECURITY.md) for the trust boundary. The build retains its existing `SYS_ADMIN` build capability; runtime verification uses the read-only settings.
 
-Rebuild to pick up updates; changing the Containerfile does not update an existing image. GitHub Actions checks shell scripts, builds the AMD64 image, compiles Rust and TypeScript programs, checks a local npm tool persists across sessions, and checks the launcher and writable project mount. ARM64 and end-to-end authenticated Codex sandbox behavior require host verification.
+Rebuild to pick up updates; changing the Containerfile does not update an existing image. GitHub Actions checks shell scripts, builds the AMD64 image, compiles and runs a TypeScript program, checks a local npm tool persists across sessions, and checks the launcher and writable project mount. ARM64 and end-to-end authenticated Codex sandbox behavior require host verification.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development checks. Licensed under the [MIT License](LICENSE).

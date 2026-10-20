@@ -56,21 +56,14 @@ podman run --rm \
   command -v git
   command -v ssh
   command -v rg
-  command -v rustc
-  command -v cargo
   printf "User: %s (UID %s)\n" "$(id -un)" "$(id -u)"
   printf "Node: %s\n" "$(node --version)"
   printf "npm: %s\n" "$(npm --version)"
   printf "TypeScript: %s\n" "$(tsc --version)"
   printf "Git: %s\n" "$(git --version)"
-  printf "Rust: %s\n" "$(rustc --version)"
-  printf "Cargo: %s\n" "$(cargo --version)"
-  rust_check_dir=$(mktemp -d)
-  trap '\''rm -rf "$rust_check_dir"'\'' EXIT
-  cargo new --bin --vcs none "$rust_check_dir/rust-check"
-  cargo run --offline --manifest-path "$rust_check_dir/rust-check/Cargo.toml"
-  mkdir "$rust_check_dir/typescript-check"
-  cd "$rust_check_dir/typescript-check"
+  typescript_check_dir=$(mktemp -d)
+  trap '\''rm -rf "$typescript_check_dir"'\'' EXIT
+  cd "$typescript_check_dir"
   npm init --yes
   printf '\''const message: string = "TypeScript works"; console.log(message);\n'\'' > index.ts
   tsc --strict index.ts
