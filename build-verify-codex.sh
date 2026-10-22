@@ -23,6 +23,7 @@ printf '\n==> Building %s (%s)\n' "$IMAGE_NAME" "$PLATFORM"
 # Preserve the namespace capability required by the existing build setup.
 podman build \
   --pull=always \
+  --no-cache \
   --platform "$PLATFORM" \
   --cap-add=SYS_ADMIN \
   --build-arg "CODEX_VERSION=$CODEX_VERSION" \

@@ -47,6 +47,8 @@ IMAGE_NAME=codex-dev:latest PLATFORM=linux/amd64 ./build-verify-codex.sh
 
 Cross-architecture builds need emulation support in your Podman environment. Native builds are preferred.
 
+Security rebuilds always pull the Node 24 base and disable build-layer caching so Debian package updates are applied. The build rejects Node.js versions older than 24.22.1, the October 21, 2026 security release. Existing containers must be recreated from the rebuilt image. PHP is not bundled; PHP installations in custom images or saved project homes require separate updates.
+
 The image uses the slim Debian base and removes apt package lists and npm download caches in their installation layers. Rust and C/C++ toolchains are excluded from the base image; projects can use a custom image when they need them. To measure a rebuilt image and inspect its layers on the host:
 
 ```bash

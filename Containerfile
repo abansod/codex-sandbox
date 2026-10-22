@@ -2,8 +2,12 @@ FROM node:24-trixie-slim
 
 USER root
 
+# Reject base images that predate the October 2026 Node.js security release.
+RUN node -e 'const [major, minor, patch] = process.versions.node.split(".").map(Number); if (major !== 24 || minor < 22 || (minor === 22 && patch < 1)) { console.error("Node.js 24.22.1 or newer in the 24.x line is required"); process.exit(1); }'
+
 # Added bubblewrap to resolve the path warning and enable secure user-space sandboxing
 RUN apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
       git \
       openssh-client \
