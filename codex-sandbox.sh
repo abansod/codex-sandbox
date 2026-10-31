@@ -234,6 +234,8 @@ podman "${run_args[@]}" "$IMAGE_NAME" -ec '
   date -u +%Y-%m-%dT%H:%M:%SZ > "$HOME/.codex-sandbox-last-used"
   exec codex "$@"
 ' codex \
+  -c 'approval_policy="on-request"' \
+  -c 'approvals_reviewer="auto_review"' \
   -c 'sandbox_workspace_write.network_access=true' \
   -c 'sandbox_workspace_write.writable_roots=["/home/codexuser/.local","/home/codexuser/.npm","/home/codexuser/.cargo","/home/codexuser/.cache"]' \
   "$@"
