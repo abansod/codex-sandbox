@@ -1,0 +1,17 @@
+# Local credentials and configuration
+.env
+.env.*
+!.env.example
+.codex/
+auth.json
+*.log
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*~
+
+# Build outputs
+node_modules/
+target/
