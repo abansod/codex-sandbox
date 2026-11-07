@@ -102,6 +102,40 @@ codex-sandbox() {
 
 Then use `codex-sandbox` as before. The default settings volume is `codex-home`, matching your existing function.
 
+## Publish project ports
+
+Keep port mappings in `.codex-sandbox.ports` at your project root:
+
+```text
+# host IP:host port:container port
+127.0.0.1:3000:3000
+127.0.0.1:5173:5173
+# UDP is supported too:
+127.0.0.1:5353:5353/udp
+```
+
+The launcher passes each nonempty, non-comment line to Podman as a separate
+`--publish` argument. This file is data, not a shell script; variables and shell
+commands are not expanded. The launcher accepts container ports, host:container mappings, and
+IPv4:host:container mappings, with optional port ranges and tcp/udp/sctp protocols.
+It checks mapping syntax and port ranges. Blank lines,
+leading/trailing whitespace, and CRLF line endings are supported. Use full-line
+comments only.
+
+With an explicit `PROJECT_DIR`, put the file in that directory. With the default
+`~/projects` mount, put it in `~/projects/my-app` when launching from that project
+or its subdirectories. Launching from the mount root or outside the mount reads
+`~/projects/.codex-sandbox.ports` instead. No parent configs are merged.
+
+You can commit this file to share settings with collaborators. No ports are
+published when the file is absent, empty, or unreadable. If any entry is malformed,
+the launcher warns and ignores all mappings in the file. Restart the sandbox after editing
+it; no image rebuild is needed. Run the development server on `0.0.0.0` inside
+the container so the published port can reach it. The examples bind host ports
+to localhost; omitting the host IP can expose the service on other host interfaces.
+Published ports are shared host resources, so concurrent sessions using the same
+host port will conflict. `state` commands ignore this file.
+
 ## Secretive SSH forwarding
 
 Open Secretive before launching. The default socket is `$HOME/.secretive/ssh-agent.sock`. The launcher uses native OpenSSH with connection details from [Podman machine inspect](https://docs.podman.io/en/latest/markdown/podman-machine-inspect.1.html), forwards the agent into a unique VM directory, and closes the tunnel and removes the socket when the container exits. The named machine must be the one serving your active Podman connection.
@@ -118,7 +152,10 @@ SSH_MODE=none PROJECT_DIR="$PWD" ./codex-sandbox.sh --version
 
 ## Project environments
 
-Each session uses a fresh container that is removed on exit with `--rm`. Its home directory is stored in a named Podman volume, so user-installed tools, caches, and home configuration survive. `/tmp` remains temporary. Each launch uses the current `IMAGE_NAME`; rebuilding the image does not erase saved homes.
+Each session uses a fresh container that is removed on exit with `--rm`.
+Container names start with the current folder name, followed by `-codex-` and a
+unique session suffix (for example, `my-app-codex-12345-6789`). Unsupported
+characters in folder names become hyphens. Its home directory is stored in a named Podman volume, so user-installed tools, caches, and home configuration survive. `/tmp` remains temporary. Each launch uses the current `IMAGE_NAME`; rebuilding the image does not erase saved homes.
 
 With the default mount, `~/projects/my-app` and its subdirectories share one home, while `~/projects/another-app` gets a different home. With an explicit `PROJECT_DIR`, that directory defines the home identity, regardless of where you launch. Launching from the default mount root or outside it uses a home for the mount root. Identity uses the canonical host path and a SHA-256 hash: symlink aliases share state, while moving a project creates a new environment. Existing saved state remains available for manual cleanup.
 

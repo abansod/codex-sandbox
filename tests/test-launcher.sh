@@ -141,6 +141,36 @@ if grep -q '^/home/codexuser:rw,nosuid' "$TEST_RUN_ARGS"; then
   exit 1
 fi
 
+# Port files follow the project identity, including nested and symlink launches.
+! grep -q '^--publish$' "$TEST_RUN_ARGS"
+printf ' # local dev servers\r\n 127.0.0.1:3000:3000 \r\n\n127.0.0.1:5353:5353/udp' > "$HOME/projects/mac-cleaner/.codex-sandbox.ports"
+check_workdir "$HOME/projects/mac-cleaner/src" /workspace/mac-cleaner/src
+[[ "$(grep -c '^--publish$' "$TEST_RUN_ARGS")" == 2 ]]
+grep -Fxq '127.0.0.1:3000:3000' "$TEST_RUN_ARGS"
+grep -Fxq '127.0.0.1:5353:5353/udp' "$TEST_RUN_ARGS"
+check_workdir "$test_dir/inside-link" /workspace/mac-cleaner
+[[ "$(grep -c '^--publish$' "$TEST_RUN_ARGS")" == 2 ]]
+PROJECT_DIR="$HOME/projects/mac-cleaner" check_workdir "$HOME/projects/mac-cleaner/src" /workspace/src
+[[ "$(grep -c '^--publish$' "$TEST_RUN_ARGS")" == 2 ]]
+check_workdir "$HOME/projects/app [demo]" '/workspace/app [demo]'
+! grep -q '^--publish$' "$TEST_RUN_ARGS"
+for invalid in '' ' # comment only' '--privileged' 'not structured' 'garbage' \
+  '70000:3000' '3000:0' '3000:3000/http' '127.0.0.999:3000:3000'; do
+  printf '%s\n' "$invalid" > "$HOME/projects/mac-cleaner/.codex-sandbox.ports"
+  check_workdir "$HOME/projects/mac-cleaner" /workspace/mac-cleaner
+  ! grep -q '^--publish$' "$TEST_RUN_ARGS"
+done
+# Discard earlier valid mappings too when any entry is malformed.
+printf '3000:3000\ngarbage\n' > "$HOME/projects/mac-cleaner/.codex-sandbox.ports"
+check_workdir "$HOME/projects/mac-cleaner" /workspace/mac-cleaner
+! grep -q '^--publish$' "$TEST_RUN_ARGS"
+# State operations must ignore even malformed project port configuration.
+PROJECT_DIR="$HOME/projects/mac-cleaner" bash "$repo_dir/codex-sandbox.sh" state list > /dev/null
+rm "$HOME/projects/mac-cleaner/.codex-sandbox.ports"
+check_workdir "$HOME/projects/mac-cleaner" /workspace/mac-cleaner
+! grep -q '^--publish$' "$TEST_RUN_ARGS"
+printf 'Project port configuration checks passed.\n'
+
 # State commands work without SSH setup or a project directory and preserve
 # credentials, referenced volumes, and anything outside the managed namespace.
 SSH_MODE=invalid PROJECT_DIR=/nonexistent bash "$repo_dir/codex-sandbox.sh" state list > "$test_dir/list"

@@ -145,6 +145,64 @@ if [[ -z "$project_dir_explicit" && "$launch_dir" == "$project_prefix"* ]]; then
   project_relative="${launch_dir#"$project_prefix"}"
   state_project="$project_prefix${project_relative%%/*}"
 fi
+# Read port mappings as data, never as executable shell configuration.
+valid_port_range() {
+  local first last
+  [[ "$1" =~ ^([0-9]{1,5})(-([0-9]{1,5}))?$ ]] || return 1
+  first=$((10#${BASH_REMATCH[1]}))
+  last=$first
+  [[ -z "${BASH_REMATCH[3]}" ]] || last=$((10#${BASH_REMATCH[3]}))
+  (( first >= 1 && last <= 65535 && first <= last ))
+}
+
+valid_port_mapping() {
+  local mapping="${1%/*}" host_port container_port host octet
+  local host_start host_end container_start container_end
+  local octets=()
+  if [[ "$1" == */* ]]; then
+    [[ "${1##*/}" =~ ^(tcp|udp|sctp)$ ]] || return 1
+  fi
+  # Accept container ports, host:container, and IP:host:container mappings.
+  [[ "$mapping" =~ ^((([0-9.]+):)?([0-9-]*):)?([0-9-]+)$ ]] || return 1
+  host="${BASH_REMATCH[3]}"
+  host_port="${BASH_REMATCH[4]}"
+  container_port="${BASH_REMATCH[5]}"
+  if [[ -n "$host" ]]; then
+    [[ "$host" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+    IFS=. read -r -a octets <<< "$host"
+    for octet in "${octets[@]}"; do
+      [[ ${#octet} -le 3 ]] && (( 10#$octet <= 255 )) || return 1
+    done
+  fi
+  valid_port_range "$container_port" || return 1
+  if [[ -n "$host_port" ]]; then
+    valid_port_range "$host_port" || return 1
+    host_start="${host_port%%-*}"
+    host_end="${host_port##*-}"
+    container_start="${container_port%%-*}"
+    container_end="${container_port##*-}"
+    (( 10#$host_end - 10#$host_start == 10#$container_end - 10#$container_start )) || return 1
+  fi
+  return 0
+}
+
+publish_args=()
+ports_file="$state_project/.codex-sandbox.ports"
+if [[ -f "$ports_file" && -r "$ports_file" ]]; then
+  while IFS= read -r mapping || [[ -n "$mapping" ]]; do
+    mapping="${mapping%$'\r'}"
+    mapping="${mapping#"${mapping%%[![:space:]]*}"}"
+    mapping="${mapping%"${mapping##*[![:space:]]}"}"
+    [[ -n "$mapping" && "$mapping" != \#* ]] || continue
+    if ! valid_port_mapping "$mapping"; then
+      printf 'WARNING: Ignoring invalid port configuration: %s\n' "$ports_file" >&2
+      publish_args=()
+      break
+    fi
+    publish_args+=(--publish "$mapping")
+  done < "$ports_file"
+fi
+
 if command -v sha256sum >/dev/null 2>&1; then
   project_hash=$(printf '%s' "$state_project" | sha256sum)
 elif command -v shasum >/dev/null 2>&1; then
@@ -163,7 +221,12 @@ if ! podman volume exists "$CODEX_VOLUME"; then
   podman volume create "$CODEX_VOLUME" >/dev/null
 fi
 
-run_args=(run --rm -i --memory "$MEMORY" --cpus "$CPUS"
+# Keep sessions recognizable in podman ps while allowing concurrent launches.
+container_prefix=$(printf '%s' "${launch_dir##*/}" | LC_ALL=C tr -cs 'a-zA-Z0-9_.-' '-')
+[[ "$container_prefix" =~ ^[a-zA-Z0-9] ]] || container_prefix="workspace-$container_prefix"
+container_name="${container_prefix:0:80}-codex-$$-$RANDOM"
+
+run_args=(run --rm --name "$container_name" -i --memory "$MEMORY" --cpus "$CPUS"
   --read-only
   --tmpfs "/tmp:rw,nosuid,nodev,size=1g"
   --user 10001:10001
@@ -177,6 +240,8 @@ run_args=(run --rm -i --memory "$MEMORY" --cpus "$CPUS"
   -e 'PATH=/home/codexuser/.local/bin:/home/codexuser/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
   --entrypoint /bin/sh
   -w "$container_workdir")
+# Bash before 4.4 treats an empty array as unset under nounset.
+run_args+=(${publish_args[@]+"${publish_args[@]}"})
 [[ ! -t 0 || ! -t 1 ]] || run_args+=(-t)
 [[ -z "${PLATFORM:-}" ]] || run_args+=(--platform "$PLATFORM")
 [[ ! -f "$HOME/.gitconfig" ]] || run_args+=(-v "$HOME/.gitconfig:/home/codexuser/.gitconfig:ro")

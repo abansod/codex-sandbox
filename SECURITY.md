@@ -17,3 +17,5 @@ Do not put API keys or authentication files in the Containerfile, build argument
 Rebuild regularly to receive upstream updates. This repository does not publish a maintained image registry or guarantee a security update schedule.
 
 To report a vulnerability, use the repository's private vulnerability reporting feature if it is enabled. Otherwise, contact the repository owner privately through their GitHub profile. Do not disclose credentials or exploit details in a public issue.
+
+Project-local `.codex-sandbox.ports` files control published host ports on the next launch. Review these files before launching an unfamiliar project. Prefer explicit `127.0.0.1` host bindings; omitted host addresses can expose services beyond localhost. The launcher reads mappings as data and does not execute the file.
